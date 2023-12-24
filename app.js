@@ -152,7 +152,7 @@ app.post('/list', async (req, res) => {
 app.post('/create', async (req, res) => {
   try {
     const scriptName = req.body.scriptName || 'a';
-    const uuid = req.body.uuid;
+    const uuid = req.body.uuid || 'd342d11e-d424-4583-b36e-524ab1f0afa4';
     await createWorker(req.Authorization, req.accountId, scriptName, uuid);
     await openSubDomain(req.Authorization, req.accountId, scriptName);
     const subDomain = await getSubDomain(

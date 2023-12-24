@@ -56,6 +56,24 @@ async function getAccountId(Authorization) {
   return id;
 }
 
+async function getSubDomain(Authorization, accountId) {
+  const res = await fetch(
+    `https://api.cloudflare.com/client/v4/accounts/${accountId}/workers/subdomain`,
+    {
+      headers: {
+        Authorization,
+        'Content-Type': `application/json`,
+      },
+    }
+  ).then((res) => res.json());
+  console.log(res);
+  const {
+    result: { subdomain },
+  } = res;
+  console.log('获取到subdomain: ', subdomain);
+  return subdomain;
+}
+
 async function openSubDomain(Authorization, accountId, scriptName) {
   const res = await fetch(
     `https://api.cloudflare.com/client/v4/accounts/${accountId}/workers/services/${scriptName}/environments/production/subdomain`,
@@ -137,8 +155,15 @@ app.post('/create', async (req, res) => {
     const uuid = req.body.uuid;
     await createWorker(req.Authorization, req.accountId, scriptName, uuid);
     await openSubDomain(req.Authorization, req.accountId, scriptName);
-
-    res.json({ msg: 'ok' });
+    const subDomain = await getSubDomain(
+      req.Authorization,
+      req.accountId,
+      scriptName
+    );
+    res.json({
+      msg: 'ok',
+      node: `vless://${uuid}@ip.sb:80?encryption=none&security=none&fp=randomized&type=ws&host=${scriptName}.${subDomain}.workers.dev&path=%2F%3Fed%3D2048#${subDomain}`,
+    });
   } catch (error) {
     console.log(error);
     res.json({ msg: 'error' + error?.errmsg });

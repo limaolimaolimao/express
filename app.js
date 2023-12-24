@@ -4,11 +4,7 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-let token = `XIeVBw4Y42nUBbq-R3X2DGkeu6WsiAJkDG4Oz4Bc`;
-
-let Authorization = `Bearer ${token}`;
-
-let accountId;
+const accountMap = new Map();
 
 async function deleteWorker(Authorization, accountId, scriptName) {
   const res = await fetch(
@@ -104,42 +100,54 @@ async function createWorker(
   console.log(res);
 }
 
-app.get('/', (req, res) => {
+app.get('/', (_, res) => {
   res.send('Hello World!');
 });
 
-app.get('/list', async (req, res) => {
-  const list = await getWorkerList(Authorization, accountId);
-  res.json(list);
-});
+app.use(async (req, res, next) => {
+  const token = req.query.token || req.body.token;
 
-app.post('/change', async (req, res) => {
-  if (req.body.token) {
-    token = req.body.token;
-    Authorization = `Bearer ${token}`;
-    accountId = await getAccountId(Authorization);
-    res.json({
-      msg: 'ok',
-    });
-  } else {
+  if (!token) {
     res.json({
       msg: 'token is null',
     });
   }
+
+  req.Authorization = `Bearer ${token}`;
+
+  if (!accountMap.has(token)) {
+    const accountId = await getAccountId(req.Authorization);
+    accountMap.set(token, accountId);
+    req.accountId = accountId;
+  } else {
+    req.accountId = accountMap.get(token);
+  }
+
+  next();
+});
+
+app.post('/list', async (req, res) => {
+  const list = await getWorkerList(req.Authorization, req.accountId);
+  res.json(list);
 });
 
 app.post('/create', async (req, res) => {
-  const scriptName = req.body.scriptName || 'a';
-  const uuid = req.body.uuid || 'a';
-  await createWorker(Authorization, accountId, scriptName, uuid);
-  await openSubDomain(Authorization, accountId, scriptName);
+  try {
+    const scriptName = req.body.scriptName || 'a';
+    const uuid = req.body.uuid;
+    await createWorker(req.Authorization, req.accountId, scriptName, uuid);
+    await openSubDomain(req.Authorization, req.accountId, scriptName);
 
-  res.json({ msg: 'ok' });
+    res.json({ msg: 'ok' });
+  } catch (error) {
+    console.log(error);
+    res.json({ msg: 'error' + error?.errmsg });
+  }
 });
 
 app.post('/del', async (req, res) => {
   if (req.body.scriptName) {
-    await deleteWorker(Authorization, accountId, req.body.scriptName);
+    await deleteWorker(req.Authorization, req.accountId, req.body.scriptName);
     res.json({
       msg: 'ok',
     });
@@ -151,17 +159,17 @@ app.post('/del', async (req, res) => {
 });
 
 app.post('/delAll', async (req, res) => {
-  const list = getWorkerList(Authorization, accountId);
-  list.forEach((i) => deleteWorker(Authorization, accountId, i.id));
-  res.json({
-    msg: 'ok',
-  });
+  if (req.body.sure) {
+    const list = await getWorkerList(req.Authorization, req.accountId);
+    list.forEach((i) => deleteWorker(req.Authorization, req.accountId, i.id));
+    res.json({
+      msg: 'ok',
+    });
+  } else {
+    res.json({
+      msg: 'sure is null',
+    });
+  }
 });
 
-async function run() {
-  accountId = await getAccountId(Authorization);
-  app.listen(3000);
-}
-
-run();
-
+app.listen(3000);
